@@ -1,0 +1,2 @@
+# for nucleotide sequences
+makeblastdb -in input.fasta -dbtype nucl -parse_seqids -out test 
