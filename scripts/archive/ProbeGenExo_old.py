@@ -1,5 +1,3 @@
-#This script is tailored for AAV project
-
 #general packages
 import pandas     as pd
 import numpy      as np
@@ -156,7 +154,7 @@ class ProbeGenerator:
     def blast_primaries_rna(self):
         print("Starting BLAST against RNA database...")
         # BLAST command for RNA database
-        blast_cmd = f"blastn -task blastn-short -db {self.blastdb_rna} -query {self.blast_fa_location} -outfmt 6 -out {self.output_dir}/blast_rna_results.txt -word_size 18 -evalue 0.001"
+        blast_cmd = f"blastn -task blastn-short -db {self.blastdb_rna} -query {self.blast_fa_location} -outfmt 6 -out {self.output_dir}/blast_rna_results.txt -word_size 16 -evalue 0.001"
         subprocess.run(blast_cmd, shell=True)
         print("BLAST against RNA database complete...")
         # Read in BLAST output
@@ -189,7 +187,7 @@ class ProbeGenerator:
                     continue
                 else:
                     offtarget_idx.append(qseqid)
-        print(f"Number of off-target sequences removed after cDNA BLAST: {len(set(offtarget_idx))}")
+        print(f"Number of off-target sequences removed after RNA BLAST: {len(set(offtarget_idx))}")
 
         # Convert FASTA file to pandas dataframe
         fasta = self.generate_fasta_df(self.blast_fa_location)
@@ -211,12 +209,12 @@ class ProbeGenerator:
 
     def blast_primaries_genome(self):
         print("Starting BLAST against genome database...")
-        blast_cmd = f"blastn -task blastn-short -db {self.blastdb_genome} -query {self.filtered_fasta_location} -outfmt 6 -out {self.output_dir}/blast_genome_results.txt -word_size 18 -evalue 0.001"
+        blast_cmd = f"blastn -task blastn-short -db {self.blastdb_genome} -query {self.filtered_fasta_location} -outfmt 6 -out {self.output_dir}/blast_genome_results.txt -word_size 16 -evalue 0.001"
         subprocess.run(blast_cmd, shell=True)
         print("BLAST against genomic genome database complete...")
         # Read in BLAST output
         try:
-            blastout = pd.read_csv(f"{self.output_dir}/blast_genome_results.txt", sep="\t", header=None)
+             blastout = pd.read_csv(f"{self.output_dir}/blast_genome_results.txt", sep="\t", header=None)
         except:
             blastout = pd.DataFrame()
 
@@ -238,10 +236,13 @@ class ProbeGenerator:
         offtarget_idx = []
         for qseqid, sseqid, overlap in blastout[[0, 1, 3]].values:
             # Genomic sequences may have different identifiers, so adjust filtering if necessary
-            if overlap < self.offtarget_overlap+1:
+            if sseqid in qseqid:
                 continue
             else:
-                offtarget_idx.append(qseqid)
+                if overlap < self.offtarget_overlap+1:
+                    continue
+                else:
+                    offtarget_idx.append(qseqid)
         print(f"Number of off-target sequences removed after genomic BLAST: {len(set(offtarget_idx))}")
         # Convert the filtered FASTA file from cDNA BLAST to pandas dataframe
         fasta = self.generate_fasta_df(self.filtered_fasta_location)
@@ -263,7 +264,7 @@ class ProbeGenerator:
     def blast_primaries_exo(self):
         print("Starting BLAST against exogenous database...")
         # Use the filtered sequences from the genome BLAST as the new query
-        blast_cmd = f"blastn -task blastn-short -db {self.blast_exogenous} -query {self.filtered_fasta_genomic_location} -outfmt 6 -out {self.output_dir}/blast_exo_results.txt -word_size 18 -evalue 0.001"
+        blast_cmd = f"blastn -task blastn-short -db {self.blast_exogenous} -query {self.filtered_fasta_genomic_location} -outfmt 6 -out {self.output_dir}/blast_exo_results.txt -word_size 16 -evalue 0.001"
         subprocess.run(blast_cmd, shell=True)
         print("BLAST against exogenous database complete...")
         # Read in BLAST output
@@ -280,9 +281,8 @@ class ProbeGenerator:
         # Filter out off-targets with overlap > 18 nt
         offtarget_idx = []
         for qseqid, sseqid, overlap in blastout[[0, 1, 3]].values:
-            qseqid_iso = qseqid.split("_")[0].split("-")[1]
-            sseqid_iso = sseqid.split("-")[1]
-            if sseqid_iso == qseqid_iso:
+            # Genomic sequences may have different identifiers, so adjust filtering if necessary
+            if sseqid in qseqid:
                 continue
             else:
                 if overlap < self.offtarget_overlap+1:
@@ -313,12 +313,13 @@ class ProbeGenerator:
         # Remove duplicates and sort
         start_df = start_df.drop_duplicates(subset=['name', 'start'])
         start_df = start_df.sort_values(['start', 'name']).reset_index(drop=True)
+        #start_df.to_csv("start.csv")
 
         final_idx = []
         genes = self.df_seqs["Name"].unique()
 
         for gene in genes:
-            gene_df = start_df[start_df['name'].str.startswith(f'{gene}_')].copy()
+            gene_df = start_df[start_df['name'].str.startswith(f"{gene}_")].copy()
             gene_df = gene_df[gene_df['start'] != -1].sort_values('start').reset_index(drop=True)
             if gene_df.empty:
                 continue
